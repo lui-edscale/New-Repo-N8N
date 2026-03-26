@@ -1,0 +1,180 @@
+{
+  "name": "Error Handling & Auto Backup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f538cd6d-f7bf-4dc7-ba93-ba2d242f2d65",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "1913d428-a3ef-4988-b93a-a0dcf166ada4",
+      "name": "Fetch Backup Data",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        -96
+      ],
+      "id": "b110aeaa-db40-4704-9119-7cc5ab13e78c",
+      "name": "Save Backup File"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log error details for monitoring\nconst items = $input.all();\nconst errorLog = [];\n\nfor (const item of items) {\n    errorLog.push({\n          json: {\n                  error_message: item.json.message || 'Unknown error',\n                  error_timestamp: new Date().toISOString(),\n                  workflow_name: 'Error Handling & Auto Backup',\n                  status: 'FAILED',\n                  retry_count: 3\n          }\n    });\n}\n\nreturn errorLog;\n          }\n    })\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        96
+      ],
+      "id": "5f110e3d-3961-412b-9b4d-2dfda3072fe2",
+      "name": "Log Error Details"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        672,
+        96
+      ],
+      "id": "7a940af6-a510-48de-aefa-6328fa4457ba",
+      "name": "Notify Error Alert",
+      "webhookId": "1c289204-3406-4e27-8eef-c5a4e899a21e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fd32f0a2-ec8c-4830-b051-fcb8399fe473",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "746a11e0-33e1-480a-85b7-27ca03e230f3",
+      "name": "Backup Success Status"
+    },
+    {
+      "parameters": {
+        "content": "## Error Handling & Auto Backup\n**Schedule:** Runs daily at midnight\n**Retry:** 3 attempts on failure\n**Success:** Data saved as JSON backup\n**Error:** Logs details + sends email alert"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        304
+      ],
+      "id": "9fac3c30-e1e7-440d-a8ab-24989f25e53e",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Backup Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Backup Data": {
+      "main": [
+        [
+          {
+            "node": "Save Backup File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error Details": {
+      "main": [
+        [
+          {
+            "node": "Notify Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Backup File": {
+      "main": [
+        [
+          {
+            "node": "Backup Success Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d25f302d-c200-446b-a880-4331ac78b4ba",
+  "meta": {
+    "instanceId": "4c833d5b22f504b8df6feeecfdd946b4b9a7815ca8d2a0de172eb346c1953262"
+  },
+  "id": "zUBeyTnTgmsPk9pm",
+  "tags": []
+}
