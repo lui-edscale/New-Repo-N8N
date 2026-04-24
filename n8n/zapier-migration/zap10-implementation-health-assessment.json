@@ -1,0 +1,1233 @@
+{
+  "updatedAt": "2026-04-24T04:59:28.083Z",
+  "createdAt": "2026-04-12T01:46:31.921Z",
+  "id": "Q5iKOZLNXs5vR0xH",
+  "name": "Zap #10: Implementation Health Assessment",
+  "description": null,
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "databaseId": {
+          "__rl": true,
+          "value": "255d71fc-6bb3-80e7-bb6a-e3aa019c2e57",
+          "mode": "list",
+          "cachedResultName": "EdScale: Implementation Health Assessment",
+          "cachedResultUrl": "https://www.notion.so/255d71fc6bb380e7bb6ae3aa019c2e57"
+        }
+      },
+      "id": "notion-trigger",
+      "name": "Notion Trigger - New Assessment",
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "oiNhuOw2ikLdNhYU",
+          "name": "Notion - Tom"
+        }
+      },
+      "notes": "Implementation Health Assessment DB: 255d71fc-6bb3-819a-8862-000be8fc3923"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst minScoreKey = data['Minimum Score'] || '';\n\nconst rawDate = data['Submission time'] || '';\nlet submissionDate = '';\nif (rawDate) {\n  const dt = new Date(rawDate);\n  if (!isNaN(dt)) {\n    submissionDate = dt.toLocaleDateString('en-US', {\n      timeZone: 'America/New_York',\n      year: 'numeric', month: '2-digit', day: '2-digit'\n    });\n  }\n}\n\nconst improvementTitles = {\n  'Lesson 1: Beware of Fat Plans': 'Focus on 3-7 priorities and ground them in reality',\n  'Lesson 2: Build a Guiding Coalition and an Exceptional Team': 'To get to scale, it takes a village',\n  \"Lesson 3: Don't Wait!\": 'Build routines & rituals into your systems',\n  'Lesson 4: Be Consistent': 'Consistency is the secret to results'\n};\nconst improvementHeaders = {\n  'Lesson 1: Beware of Fat Plans': '✔ Lesson 1: Beware of Fat Plans',\n  'Lesson 2: Build a Guiding Coalition and an Exceptional Team': '✔ Lesson 2: Build a Guiding Coalition and an Exceptional Team',\n  \"Lesson 3: Don't Wait!\": \"✔ Lesson 3: Don't Wait!\",\n  'Lesson 4: Be Consistent': '✔ Lesson 4: Be Consistent'\n};\nconst lessonIndicatorKeys = {\n  'Lesson 1: Beware of Fat Plans': [\n    'Goals: Success in 1-3 years is clearly defined and measurable.',\n    'Priorities: The top 3-7 priorities are identified and widely known.',\n    'Alignment and Coherence: There is alignment and coherence amongst the priorities, evident in schools. Things that are in direct conflict are removed.'\n  ],\n  'Lesson 2: Build a Guiding Coalition and an Exceptional Team': [\n    'Guiding Coalition: Key stakeholders of influence are engaged and meet periodically to inform and support implementation.',\n    'Implementation Team: The right people with the requisite knowledge, skills, and relationships are leading project implementation.',\n    'Delivery Chain: People in the field involved in implementation have the right mindset, guidance, capacity, and support to implement.'\n  ],\n  \"Lesson 3: Don't Wait!\": [\n    'Feedback: Feedback loops are in place to capture what’s working and what’s not in implementation.',\n    'Learning: Feedback and coaching is aimed at supporting growth and improvement (think carrots not sticks).',\n    'Communication: Trusted messengers are used to communicate stories of impact to key stakeholders.'\n  ],\n  'Lesson 4: Be Consistent': [\n    'Routines: Regular routines are held to drive implementation by celebrating and scaling what’s working and problem-solving areas that are off track.',\n    'Time Blocking: Days and weeks are planned around the “big rocks” aligned with the priorities; other meetings and tasks are fit in around them.',\n    'Consistency: There is a consistent drum beat of implementation focused on the priorities every day.'\n  ]\n};\nconst lessonChapter = {\n  'Lesson 1: Beware of Fat Plans': 1,\n  'Lesson 2: Build a Guiding Coalition and an Exceptional Team': 2,\n  \"Lesson 3: Don't Wait!\": 3,\n  'Lesson 4: Be Consistent': 4\n};\n\nconst indicators = (lessonIndicatorKeys[minScoreKey] || []).map(k => '✔ ' + k).join('\\n');\nconst chapter = lessonChapter[minScoreKey];\nlet improvementText = 'Indicators\\n' + indicators;\nif (chapter) {\n  improvementText += '\\n\\nExplore this area of implementation further by:\\n✔ Book: Read Chapter ' + chapter;\n}\n\nreturn [{ json: {\n  ...data,\n  pageId: data.id,\n  submissionTime: rawDate,\n  submissionDate,\n  email: data['Email'] || '',\n  firstName: data['First Name'] || '',\n  lastName: data['Last Name'] || '',\n  minScoreKey,\n  improvementHeader: improvementHeaders[minScoreKey] || minScoreKey,\n  improvementTitle: improvementTitles[minScoreKey] || '',\n  improvementText,\n  project: data['Project: Pick an implementation project to assess'] || '',\n  scores: {\n    L1: data['Lesson 1: Beware of Fat Plans'] || 0,\n    L2: data['Lesson 2: Build a Guiding Coalition and an Exceptional Team'] || 0,\n    L3: data[\"Lesson 3: Don't Wait!\"] || 0,\n    L4: data['Lesson 4: Be Consistent'] || 0,\n    results: data['Results'] || 0,\n    implementation: data['Implementation'] || 0,\n    goals: data['1. Goals'] || 0,\n    priorities: data['1. Priorities'] || 0,\n    alignment: data['1. Alignment & Coherence'] || 0,\n    coalition: data['2. Guiding Coalition'] || 0,\n    implTeam: data['2. Implementation Team'] || 0,\n    delivery: data['2. Delivery Chain'] || 0,\n    feedback: data['3. Feedback'] || 0,\n    learning: data['3. Learning'] || 0,\n    communication: data['3. Communication'] || 0,\n    routines: data['4. Routines'] || 0,\n    timeBlocking: data['4. Time Blocking'] || 0,\n    consistency: data['4. Consistency'] || 0,\n    scorecard2x2: data['2x2 Results and Implementation'] || 0\n  }\n}}];"
+      },
+      "id": "extract-data",
+      "name": "Extract Assessment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1NeEkiszAGRPcYF5mCpaEv2eHR9wmJ_R3VGN92RWB1-o",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "0",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "Date": "={{ $('Extract Assessment Data').item.json.submissionDate }}",
+            "Lesson 1: Beware of Fat Plans": "={{ $json['Lesson 1: Beware of Fat Plans'] }}",
+            "Lesson 2: Build a Guiding Coalition and an Exceptional Team": "={{ $json['Lesson 2: Build a Guiding Coalition and an Exceptional Team'] }}",
+            "Lesson 3: Don't Wait!": "={{ $json['Lesson 3: Don\\'t Wait!'] }}",
+            "Lesson 4: Be Consistent": "={{ $json['Lesson 4: Be Consistent'] }}",
+            "Lowest Score: ": "={{ $json['Lowest Score'] }}",
+            "Email": "={{ $json.email }}",
+            "First Name": "={{ $json.firstName }}",
+            "Last Name": "={{ $json.lastName }}",
+            "Project: Pick an implementation project to assess": "={{ $json['Project: Pick an implementation project to assess'] }}",
+            "2x2 Results and Implementation": "={{ $json['2x2 Results and Implementation'] }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lesson 1: Beware of Fat Plans",
+              "displayName": "Lesson 1: Beware of Fat Plans",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lesson 2: Build a Guiding Coalition and an Exceptional Team",
+              "displayName": "Lesson 2: Build a Guiding Coalition and an Exceptional Team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lesson 3: Don't Wait!",
+              "displayName": "Lesson 3: Don't Wait!",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lesson 4: Be Consistent",
+              "displayName": "Lesson 4: Be Consistent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lowest Score: ",
+              "displayName": "Lowest Score: ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Org, Team or Project for Scorecard",
+              "displayName": "Org, Team or Project for Scorecard",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Results: Results are strong, both locally and compared to national standards.",
+              "displayName": "Results: Results are strong, both locally and compared to national standards.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Implementation: Implementation systems and supports are in place and implementation is strong based on gathered evidence.",
+              "displayName": "Implementation: Implementation systems and supports are in place and implementation is strong based on gathered evidence.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Goals: Success in 1-3 years is clearly defined and measurable.",
+              "displayName": "Goals: Success in 1-3 years is clearly defined and measurable.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Priorities: The top 3-7 priorities are identified and widely known.",
+              "displayName": "Priorities: The top 3-7 priorities are identified and widely known.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Alignment and Coherence: There is alignment and coherence amongst the priorities, evident in schools. Things that are in direct conflict are removed.",
+              "displayName": "Alignment and Coherence: There is alignment and coherence amongst the priorities, evident in schools. Things that are in direct conflict are removed.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Guiding Coalition: Key stakeholders of influence are engaged and meet periodically to inform and support implementation.",
+              "displayName": "Guiding Coalition: Key stakeholders of influence are engaged and meet periodically to inform and support implementation.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Implementation Team: The right people with the requisite knowledge, skills, and relationships are leading project implementation.",
+              "displayName": "Implementation Team: The right people with the requisite knowledge, skills, and relationships are leading project implementation.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Delivery Chain: People in the field involved in implementation have the right mindset, guidance, capacity, and support to implement.",
+              "displayName": "Delivery Chain: People in the field involved in implementation have the right mindset, guidance, capacity, and support to implement.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Feedback: Feedback loops are in place to capture what’s working and what’s not in implementation.",
+              "displayName": "Feedback: Feedback loops are in place to capture what’s working and what’s not in implementation.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Learning: Feedback and coaching is aimed at supporting growth and improvement (think carrots not sticks).",
+              "displayName": "Learning: Feedback and coaching is aimed at supporting growth and improvement (think carrots not sticks).",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Communication: Trusted messengers are used to communicate stories of impact to key stakeholders.",
+              "displayName": "Communication: Trusted messengers are used to communicate stories of impact to key stakeholders.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Routines: Regular routines are held to drive implementation by celebrating and scaling what’s working and problem-solving areas that are off track.",
+              "displayName": "Routines: Regular routines are held to drive implementation by celebrating and scaling what’s working and problem-solving areas that are off track.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Time Blocking: Days and weeks are planned around the “big rocks” aligned with the priorities; other meetings and tasks are fit in around them.",
+              "displayName": "Time Blocking: Days and weeks are planned around the “big rocks” aligned with the priorities; other meetings and tasks are fit in around them.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Consistency: There is a consistent drum beat of implementation focused on the priorities every day.",
+              "displayName": "Consistency: There is a consistent drum beat of implementation focused on the priorities every day.",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Project: Pick an implementation project to assess",
+              "displayName": "Project: Pick an implementation project to assess",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "2x2 Results and Implementation",
+              "displayName": "2x2 Results and Implementation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "2. Implementation Team",
+              "displayName": "2. Implementation Team",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "1. Alignment & Coherence",
+              "displayName": "1. Alignment & Coherence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "2. Delivery Chain",
+              "displayName": "2. Delivery Chain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Original Created time",
+              "displayName": "Original Created time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "3. Learning",
+              "displayName": "3. Learning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "1. Goals",
+              "displayName": "1. Goals",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "4. Routines",
+              "displayName": "4. Routines",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Results",
+              "displayName": "Results",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "2. Guiding Coalition",
+              "displayName": "2. Guiding Coalition",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "4. Consistency",
+              "displayName": "4. Consistency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Minimum Score",
+              "displayName": "Minimum Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "1. Priorities",
+              "displayName": "1. Priorities",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Implementation",
+              "displayName": "Implementation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "4. Time Blocking",
+              "displayName": "4. Time Blocking",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "3. Communication",
+              "displayName": "3. Communication",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Respondent",
+              "displayName": "Respondent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Lowest Score",
+              "displayName": "Lowest Score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "3. Feedback",
+              "displayName": "3. Feedback",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Submission time",
+              "displayName": "Submission time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "completed",
+              "displayName": "completed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "pageId",
+              "displayName": "pageId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "submissionTime",
+              "displayName": "submissionTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "submissionDate",
+              "displayName": "submissionDate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "minScoreKey",
+              "displayName": "minScoreKey",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "improvementHeader",
+              "displayName": "improvementHeader",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "improvementTitle",
+              "displayName": "improvementTitle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "improvementText",
+              "displayName": "improvementText",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "project",
+              "displayName": "project",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "scores",
+              "displayName": "scores",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets-append",
+      "name": "Google Sheets - Append Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        560,
+        400
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j1Aa0pBVvvQJ5VzH",
+          "name": "Google Sheet - Lui"
+        }
+      },
+      "notes": "NEEDS SETUP: Connect Google Sheets OAuth2 credential. Spreadsheet: 1NeEkiszAGRPcYF5mCpaEv2eHR9wmJ_R3VGN92RWB1-o"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chart: {\n    type: 'radar',\n    data: {\n      labels: [\n        '✔ Lesson 1: Beware of Fat Plans',\n        ['✔ Lesson 2: Build a Guiding Coalition', 'and an Exceptional Team'],\n        \"✔ Lesson 3: Don't Wait!\",\n        '✔ Lesson 4: Be Consistent'\n      ],\n      datasets: [{\n        label: 'Score',\n        data: [\n          $('Extract Assessment Data').item.json.scores.L1,\n          $('Extract Assessment Data').item.json.scores.L2,\n          $('Extract Assessment Data').item.json.scores.L3,\n          $('Extract Assessment Data').item.json.scores.L4\n        ],\n        backgroundColor: 'rgba(54, 88, 153, 0.3)',\n        borderColor: 'rgba(54, 88, 153, 1)',\n        pointBackgroundColor: 'rgba(54, 88, 153, 1)'\n      }]\n    },\n    options: {\n      maintainAspectRatio: false,\n      plugins: { legend: { display: false } },\n      scales: { r: { beginAtZero: true, min: 0, max: 4, ticks: { stepSize: 1, color: '#353535', backdropColor: 'transparent', font: { family: 'Tahoma' } }, pointLabels: { color: '#353535', font: { size: 11, family: 'Arial' } }, grid: { color: '#cccccc' }, angleLines: { color: '#cccccc' } } }\n    }\n  },\n  backgroundColor: 'white',\n  width: 800,\n  height: 500,\n  version: '4'\n}) }}",
+        "options": {}
+      },
+      "id": "chart-radar",
+      "name": "QuickChart - Radar Chart",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://quickchart.io/chart/create",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  chart: {\n    type: 'bar',\n    data: {\n      labels: [\n        '2x2 – Results and Implementation (' + $('Extract Assessment Data').item.json.scores.scorecard2x2 + '/4)',\n        '  Results',\n        '  Implementation',\n        '✔ Lesson 1 – Beware of Fat Plans (' + $('Extract Assessment Data').item.json.scores.L1 + '/4)',\n        '  Goals',\n        '  Priorities',\n        '  Alignment and Coherence',\n        '✔ Lesson 2 – Build a Guiding Coalition and an Exceptional Team (' + $('Extract Assessment Data').item.json.scores.L2 + '/4)',\n        '  Guiding Coalition',\n        '  Implementation Team',\n        '  Delivery Chain',\n        \"✔ Lesson 3 – Don't Wait! (\" + $('Extract Assessment Data').item.json.scores.L3 + '/4)',\n        '  Feedback',\n        '  Learning',\n        '  Communication',\n        '✔ Lesson 4 – Be Consistent (' + $('Extract Assessment Data').item.json.scores.L4 + '/4)',\n        '  Routines',\n        '  Time Blocking',\n        '  Consistency'\n      ],\n      datasets: [{\n        label: 'Scores (out of 4)',\n        data: [\n          null,\n          $('Extract Assessment Data').item.json.scores.results,\n          $('Extract Assessment Data').item.json.scores.implementation,\n          null,\n          $('Extract Assessment Data').item.json.scores.goals,\n          $('Extract Assessment Data').item.json.scores.priorities,\n          $('Extract Assessment Data').item.json.scores.alignment,\n          null,\n          $('Extract Assessment Data').item.json.scores.coalition,\n          $('Extract Assessment Data').item.json.scores.implTeam,\n          $('Extract Assessment Data').item.json.scores.delivery,\n          null,\n          $('Extract Assessment Data').item.json.scores.feedback,\n          $('Extract Assessment Data').item.json.scores.learning,\n          $('Extract Assessment Data').item.json.scores.communication,\n          null,\n          $('Extract Assessment Data').item.json.scores.routines,\n          $('Extract Assessment Data').item.json.scores.timeBlocking,\n          $('Extract Assessment Data').item.json.scores.consistency\n        ],\n        backgroundColor: [\n          'transparent',\n          '#d8d6e6', '#d8d6e6',\n          'transparent',\n          '#d8d6e6', '#d8d6e6', '#d8d6e6',\n          'transparent',\n          '#d8d6e6', '#d8d6e6', '#d8d6e6',\n          'transparent',\n          '#d8d6e6', '#d8d6e6', '#d8d6e6',\n          'transparent',\n          '#d8d6e6', '#d8d6e6', '#d8d6e6'\n        ],\n        borderRadius: 3,\n        barThickness: 6\n      }]\n    },\n    options: {\n      indexAxis: 'y',\n      maintainAspectRatio: false,\n      plugins: {\n        legend: { display: false },\n        title: { display: false, text: 'Implementation Health Assessment – Question Scores (1–4 Scale)', font: { size: 16, family: 'Tahoma' }, color: '#353535' },\n        tooltip: { enabled: true }\n      },\n      scales: {\n        x: { beginAtZero: true, max: 4, title: { display: false, text: 'Score (1–4)', color: '#353535' }, grid: { display: false }, ticks: { color: '#353535', font: { family: 'Tahoma' } } },\n        y: { ticks: { font: { size: 9, weight: 'normal', family: 'Arial' }, color: '#353535', autoSkip: false }, grid: { display: false } }\n      },\n      layout: { padding: 10 }\n    }\n  },\n  backgroundColor: 'white',\n  width: 800,\n  height: 400,\n  version: '4'\n}) }}",
+        "options": {}
+      },
+      "id": "chart-bar",
+      "name": "QuickChart - 2x2 Bar Chart",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-charts",
+      "name": "Merge Chart URLs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1408,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/drive/v3/files/1WPynkb262x3P7XmeK5rtlNup297goub_29Ixvrc8HbE/copy",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\"name\": \"Scorecard Report | \" + $('Extract Assessment Data').item.json.firstName + \" \" + $('Extract Assessment Data').item.json.lastName}) }}",
+        "options": {}
+      },
+      "id": "slides-create",
+      "name": "Google Slides - Create from Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        400
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ajPev6saHp2FW0Ju",
+          "name": "Google Drive - Lui"
+        }
+      },
+      "notes": "Copies the template slide deck (1WPynkb262x3P7XmeK5rtlNup297goub_29Ixvrc8HbE). Replacing {{template_fields}} happens via the Slides API in next step."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://slides.googleapis.com/v1/presentations/{{ $json.id }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  requests: [\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bHeader\\u007d\\u007d', matchCase: true }, replaceText: $('Extract Assessment Data').item.json.firstName + ', thank you for taking the implementation scorecard.' } },\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bSub-Header\\u007d\\u007d', matchCase: true }, replaceText: 'This is how you scored, answering 15 questions about your organization, team, or project.' } },\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bImprovement_Text\\u007d\\u007d', matchCase: true }, replaceText: $('Extract Assessment Data').item.json.improvementText } },\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bImprovement_Header\\u007d\\u007d', matchCase: true }, replaceText: $('Extract Assessment Data').item.json.improvementHeader } },\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bImprovement_Sub-Header\\u007d\\u007d', matchCase: true }, replaceText: $('Extract Assessment Data').item.json.improvementTitle } },\n    { replaceAllText: { containsText: { text: '\\u007b\\u007bimplementation_challenge\\u007d\\u007d', matchCase: true }, replaceText: $('Extract Assessment Data').item.json.project } },\n    { replaceAllShapesWithImage: { imageUrl: $('QuickChart - Radar Chart').item.json.url, imageReplaceMethod: 'CENTER_INSIDE', containsText: { text: '\\u007b\\u007bChart\\u007d\\u007d', matchCase: true } } },\n    { replaceAllShapesWithImage: { imageUrl: $('QuickChart - 2x2 Bar Chart').item.json.url, imageReplaceMethod: 'CENTER_INSIDE', containsText: { text: '\\u007b\\u007bchart_2x2\\u007d\\u007d', matchCase: true } } }\n  ]\n}) }}",
+        "options": {}
+      },
+      "id": "slides-replace",
+      "name": "Slides - Replace Template Fields",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        400
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ajPev6saHp2FW0Ju",
+          "name": "Google Drive - Lui"
+        }
+      },
+      "notes": "Note: Chart image insertion via Slides API is more complex. For now we replace text fields. Charts can be manually inserted or you can extend this node to use insertImage API."
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $('Google Slides - Create from Template').item.json.id }}/export",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "mimeType",
+              "value": "application/pdf"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "export-pdf",
+      "name": "Export Slides as PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        400
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ajPev6saHp2FW0Ju",
+          "name": "Google Drive - Lui"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "Scorecard Report: How to Implement (just about) Anything",
+        "emailType": "html",
+        "message": "=<p>Hey {{ $('Extract Assessment Data').item.json.firstName }},</p>\n\n<p>Thank you for completing the scorecard from my book \"How to Implement (just about) Anything\".</p>\n\n<p>Please see the attached personalized results.</p>\n\n<br>\n\n<div dir=\"ltr\">\n  <div style=\"font-family:tahoma,sans-serif;font-size:small\"><font color=\"#000000\">Thanks, Tom</font></div>\n  <div style=\"color:rgb(136,136,136);font-size:12.8px\">\n    <div style=\"font-family:tahoma,sans-serif;font-size:small\">--<br>\n      <img src=\"https://ci3.googleusercontent.com/mail-sig/AIorK4xAruPn0AcRW54OtahYokWCZxj6H_JqMLW7JN5qzCfejsPOBGRQkZq0fElD2ZTOtg4v6KU-950\"><br>\n    </div>\n  </div>\n  <div dir=\"ltr\" style=\"color:rgb(136,136,136);font-family:tahoma,sans-serif;font-size:small\">\n    <span style=\"font-family:arial,sans-serif\">Tom DeWire</span>, Founder and Principal Consultant\n  </div>\n  <div style=\"font-family:tahoma,sans-serif;font-size:small\">\n    <span style=\"font-family:arial,sans-serif\">\n      <a href=\"http://www.edscalellc.com\" target=\"_blank\"><font color=\"#351c75\">www.edscalellc.com</font></a>\n      <font color=\"#888888\"> | (302) 540-4596</font>\n    </span>\n  </div>\n  <div style=\"font-family:tahoma,sans-serif;font-size:small\">\n    <font color=\"#888888\">\n      <a href=\"http://www.edscalellc.com/book\" target=\"_blank\">Buy book</a> |\n      <a href=\"https://tidycal.com/tomdewire\" target=\"_blank\">Schedule call</a>\n    </font>\n  </div>\n</div>",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          },
+          "sendTo": "={{ $('Extract Assessment Data').item.json.email }}"
+        }
+      },
+      "id": "gmail-send",
+      "name": "Draft Scorecard Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2640,
+        416
+      ],
+      "webhookId": "c8117ea0-9c73-49ca-a9e6-387d7ae65bb0",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Thg0Wn6SQ7ydyKcW",
+          "name": "Gmail account - Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://people.googleapis.com/v1/contactGroups/6864ea6d8b2240cb/members:modify",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleContactsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"resourceNamesToAdd\":[\"{{ $json.resourceName }}\"],\"resourceNamesToRemove\":[]}",
+        "options": {}
+      },
+      "id": "add-group",
+      "name": "Add to BS-Newsletter Group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3936,
+        256
+      ],
+      "credentials": {
+        "googleContactsOAuth2Api": {
+          "id": "cMhwSA7uKcQEx8at",
+          "name": "Google Contacts Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Implementation Health Assessment → Scorecard PDF\n**Migrated from Zapier**\n\n### Flow:\n1. **Notion Trigger** — polls every minute for new assessment\n2. **Extract Assessment Data** — flattens Notion data, computes scores, builds improvement text dynamically based on lowest-scoring lesson\n3. **Google Sheets** — appends row to tracking sheet\n4. **QuickChart** (parallel) — generates radar (4 lessons, /4 scale) + horizontal bar (full breakdown, /4 scale), returns public URLs\n5. **Merge** — combines both chart URLs\n6. **Google Slides** — copies template, replaces 6 text fields + inserts both charts via replaceAllShapesWithImage\n7. **Export PDF** — downloads slide deck as PDF\n8. **Rename PDF** — sets filename to `Scorecard Report | {FirstName} | {MM-DD-YYYY}.pdf`\n9. **Draft Scorecard Email** — creates Gmail draft in Tom's account (HTML body + signature, PDF attached)\n10. **Google Contacts → Find / IF / Add or Create** — finds contact by email, adds to BS-Newsletter group; if not found, creates new contact with group membership inline\n\n### Resources:\n- Notion DB: `255d71fc-6bb3-80e7-bb6a-e3aa019c2e57` (EdScale: Implementation Health Assessment)\n- Sheets: `1NeEkiszAGRPcYF5mCpaEv2eHR9wmJ_R3VGN92RWB1-o`\n- Slides template: `1WPynkb262x3P7XmeK5rtlNup297goub_29Ixvrc8HbE`\n- BS-Newsletter group: `contactGroups/6864ea6d8b2240cb`\n\n### Notes:\n- Slides template placeholders: `{{Header}}`, `{{Sub-Header}}`, `{{Improvement_Text}}`, `{{Improvement_Header}}`, `{{Improvement_Sub-Header}}`, `{{implementation_challenge}}`, `{{Chart}}` (radar), `{{chart_2x2}}` (bar)\n- Emails land as DRAFTS in Tom's Gmail — Tom reviews + sends manually\n- Improvement text dynamically uses Notion column descriptions for the lowest-scoring lesson's 3 indicators + `Book: Read Chapter X`",
+        "height": 500,
+        "width": 540
+      },
+      "id": "note-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "fields": [
+          "emailAddresses",
+          "names",
+          "memberships"
+        ],
+        "useQuery": true,
+        "query": "={{ $('Extract Assessment Data').item.json.email }}"
+      },
+      "id": "search-contact",
+      "name": "Google Contacts – Find Contact",
+      "type": "n8n-nodes-base.googleContacts",
+      "typeVersion": 1,
+      "position": [
+        2912,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleContactsOAuth2Api": {
+          "id": "cMhwSA7uKcQEx8at",
+          "name": "Google Contacts Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "contact-exists",
+              "leftValue": "={{ $json.resourceName }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-contact-exists",
+      "name": "IF – Contact Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3184,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "existing-not-in-group",
+              "leftValue": "={{ JSON.stringify($json.memberships || []) }}",
+              "rightValue": "6864ea6d8b2240cb",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-existing-in-group",
+      "name": "IF – Existing Contact Not in BS-Newsletter",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3648,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://people.googleapis.com/v1/people:createContact",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleContactsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"names\": [{\n    \"givenName\": \"{{ $('Extract Assessment Data').item.json.firstName }}\",\n    \"familyName\": \"{{ $('Extract Assessment Data').item.json.lastName }}\"\n  }],\n  \"emailAddresses\": [{\n    \"type\": \"work\",\n    \"value\": \"{{ $('Extract Assessment Data').item.json.email }}\"\n  }],\n  \"memberships\": [\n    {\"contactGroupMembership\": {\"contactGroupResourceName\": \"contactGroups/6864ea6d8b2240cb\"}}\n  ]\n}",
+        "options": {}
+      },
+      "id": "create-contact-with-group",
+      "name": "Create Contact w/ Group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3648,
+        544
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googleContactsOAuth2Api": {
+          "id": "cMhwSA7uKcQEx8at",
+          "name": "Google Contacts Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst data = $('Extract Assessment Data').item.json;\nconst dateStr = (data.submissionDate || '').replace(/\\//g, '-');\nconst fileName = 'Scorecard Report | ' + (data.firstName || 'Respondent') + ' | ' + dateStr + '.pdf';\nitems.forEach(item => {\n  if (item.binary && item.binary.data) {\n    item.binary.data.fileName = fileName;\n  }\n});\nreturn items;"
+      },
+      "id": "rename-pdf",
+      "name": "Rename PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Notion Trigger - New Assessment": {
+      "main": [
+        [
+          {
+            "node": "Extract Assessment Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Assessment Data": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Append Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Append Row": {
+      "main": [
+        [
+          {
+            "node": "QuickChart - Radar Chart",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "QuickChart - 2x2 Bar Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Chart URLs": {
+      "main": [
+        [
+          {
+            "node": "Google Slides - Create from Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Slides - Create from Template": {
+      "main": [
+        [
+          {
+            "node": "Slides - Replace Template Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slides - Replace Template Fields": {
+      "main": [
+        [
+          {
+            "node": "Export Slides as PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Contacts – Find Contact": {
+      "main": [
+        [
+          {
+            "node": "IF – Contact Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Contact Found?": {
+      "main": [
+        [
+          {
+            "node": "IF – Existing Contact Not in BS-Newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Contact w/ Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – Existing Contact Not in BS-Newsletter": {
+      "main": [
+        [
+          {
+            "node": "Add to BS-Newsletter Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Scorecard Email": {
+      "main": [
+        [
+          {
+            "node": "Google Contacts – Find Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QuickChart - Radar Chart": {
+      "main": [
+        [
+          {
+            "node": "Merge Chart URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QuickChart - 2x2 Bar Chart": {
+      "main": [
+        [
+          {
+            "node": "Merge Chart URLs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Export Slides as PDF": {
+      "main": [
+        [
+          {
+            "node": "Rename PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rename PDF": {
+      "main": [
+        [
+          {
+            "node": "Draft Scorecard Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "g67Nzpu0LDrJoyq6"
+  },
+  "tags": []
+}
