@@ -1,0 +1,913 @@
+{
+  "updatedAt": "2026-04-30T13:40:23.109Z",
+  "createdAt": "2026-04-11T23:43:24.638Z",
+  "id": "0kMoxTOpGoVlrzSP",
+  "name": "Zap #4: Personal Star emails → Notion inbox (Alyson)",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// ===== HELPER FUNCTIONS =====\n\nfunction decode(str) {\n  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&nbsp;/g, ' ').replace(/&#(\\d+);/g, (m, c) => String.fromCharCode(c));\n}\n\n// Extract name from Gmail's {value:[{address,name}]} format\nfunction getName(field) {\n  if (!field) return '';\n  if (typeof field === 'string') {\n    const m = field.match(/^\"?([^\"<]+)\"?\\s*</);\n    return m ? m[1].trim() : field.replace(/\"/g, '').trim();\n  }\n  if (typeof field === 'object' && !Array.isArray(field)) {\n    if (field.value && Array.isArray(field.value)) {\n      return field.value.map(v => (v.name || v.address || '').replace(/\"/g, '').trim()).join(', ');\n    }\n    return (field.name || field.address || '').replace(/\"/g, '').trim();\n  }\n  if (Array.isArray(field)) return field.map(f => getName(f)).join(', ');\n  return String(field);\n}\n\n// Extract email from Gmail's {value:[{address,name}]} format\nfunction getEmail(field) {\n  if (!field) return '';\n  if (typeof field === 'string') {\n    const m = field.match(/<([^>]+)>/);\n    return m ? m[1] : field;\n  }\n  if (typeof field === 'object' && !Array.isArray(field)) {\n    if (field.value && Array.isArray(field.value) && field.value[0]) {\n      return field.value[0].address || field.value[0].email || '';\n    }\n    return field.email || field.address || '';\n  }\n  return String(field);\n}\n\n// Format HTML to clean plain text following these rules:\n// - Remove ALL HTML tags entirely\n// - Convert line breaks and paragraph tags into natural line breaks\n// - Do NOT use any headings — plain text blocks only\n// - Preserve bullet points and numbered lists, max 2 levels deep\n// - Keep all original text exactly as written — no summarizing\n// - Remove inline styles, scripts, metadata\nfunction formatHtml(html) {\n  if (!html) return '';\n\n  // Remove style, script, comments\n  html = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n  html = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\n  html = html.replace(/<!--[\\s\\S]*?-->/g, '');\n\n  // Convert links: preserve as text (url)\n  html = html.replace(/<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi, (m, url, text) => {\n    text = text.replace(/<[^>]+>/g, '').trim();\n    if (!text || text === url) return url;\n    return text + ' (' + url + ')';\n  });\n\n  // Convert block elements to line breaks\n  html = html.replace(/<br\\s*\\/?>/gi, '\\n');\n  html = html.replace(/<\\/(p|div|blockquote)>/gi, '\\n\\n');\n  html = html.replace(/<p[^>]*>/gi, '');\n  html = html.replace(/<div[^>]*>/gi, '');\n  html = html.replace(/<blockquote[^>]*>/gi, '');\n\n  // Tables: rows become lines, cells become spaces\n  html = html.replace(/<\\/(tr)>/gi, '\\n');\n  html = html.replace(/<\\/(td|th)>/gi, ' ');\n\n  // Horizontal rules\n  html = html.replace(/<hr[^>]*>/gi, '\\n---\\n');\n\n  // Headings: convert to plain text (no heading formatting)\n  html = html.replace(/<h[1-6][^>]*>/gi, '\\n');\n  html = html.replace(/<\\/h[1-6]>/gi, '\\n\\n');\n\n  // Lists: preserve bullet points, flatten to max 2 levels\n  html = html.replace(/<\\/li>/gi, '\\n');\n  // Nested lists (3+ deep) — flatten\n  html = html.replace(/<(ul|ol)[^>]*>/gi, '');\n  html = html.replace(/<\\/(ul|ol)>/gi, '');\n  html = html.replace(/<li[^>]*>/gi, '\\u2022 ');\n\n  // Strip ALL remaining HTML tags\n  html = html.replace(/<[^>]+>/g, '');\n\n  // Decode HTML entities\n  html = decode(html);\n\n  // Clean up whitespace\n  html = html.replace(/[ \\t]+/g, ' ');\n  html = html.replace(/\\n[ \\t]+/g, '\\n');\n  html = html.replace(/[ \\t]+\\n/g, '\\n');\n  html = html.replace(/\\n{3,}/g, '\\n\\n');\n\n  return html.trim();\n}\n\n// ===== MAIN PROCESSING =====\n\nfor (const item of $input.all()) {\n  const json = item.json;\n\n  // Extract fields\n  const rawFrom = json.from || json.From;\n  const rawTo = json.to || json.To;\n  const fromName = getName(rawFrom);\n  const toName = getName(rawTo);\n  const fromEmail = getEmail(rawFrom).toLowerCase();\n  const subject = json.subject || json.Subject || '';\n  const date = json.date || json.Date || '';\n  const messageUrl = json.messageUrl || ('https://mail.google.com/mail/u/0/#inbox/' + (json.id || ''));\n\n  // Contact name: if Tom sent it, use recipient; otherwise use sender\n  const isTom = fromEmail.includes('tom.dewire@gmail.com');\n  item.json.contactName = isTom ? toName : fromName;\n\n  // Format email body from HTML\n  const bodyHtml = json.textHtml || json.html || '';\n  const bodyFormatted = formatHtml(bodyHtml) || json.textPlain || json.text || json.snippet || '';\n\n  // Detect attachments\n  const binaryKeys = Object.keys(item.binary || {}).filter(k => k.startsWith('attachment_'));\n  const attachmentNames = binaryKeys.map(k => (item.binary[k].fileName || k));\n\n  // Build full \"Name <email>\" for From/To display\n  const fromDisplay = fromName && fromEmail ? fromName + ' <' + getEmail(rawFrom) + '>' : fromName || getEmail(rawFrom);\n  const toDisplay = (() => {\n    if (!rawTo) return '';\n    if (typeof rawTo === 'object' && !Array.isArray(rawTo) && rawTo.value && Array.isArray(rawTo.value)) {\n      return rawTo.value.map(v => {\n        const n = (v.name || '').replace(/\"/g, '').trim();\n        const e = (v.address || v.email || '').trim();\n        if (n && e) return n + ' <' + e + '>';\n        return e || n || '';\n      }).filter(s => s).join(', ');\n    }\n    const tn = toName;\n    const te = getEmail(rawTo);\n    return tn && te ? tn + ' <' + te + '>' : tn || te;\n  })();\n\n  let formatted = 'From: ' + fromDisplay;\n  formatted += '\\nTo: ' + toDisplay;\n  formatted += '\\nDate: ' + date;\n  formatted += '\\nSubject: ' + subject;\n  formatted += '\\nEmail URL: ' + messageUrl;\n  formatted += '\\n\\n---\\n\\n';\n  formatted += bodyFormatted;\n  formatted += '\\n\\n---\\nAttachments:\\n';\n  if (attachmentNames.length > 0) {\n    formatted += attachmentNames.map(n => n).join('\\n');\n  } else {\n    formatted += 'No attachments.';\n  }\n\n  // Store results\n  item.json.formattedEmail = formatted;\n  item.json.subject = subject;\n  item.json.date = date;\n  item.json.from = fromName;\n  item.json.to = toName;\n  item.json.messageUrl = messageUrl;\n  item.json.hasAttachments = binaryKeys.length > 0;\n  item.json.attachmentNames = attachmentNames;\n  item.json.attachmentText = '';\n}\n\nreturn $input.all();"
+      },
+      "id": "code-1",
+      "name": "Extract Contact Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "14ad71fc-6bb3-80ef-b851-e5abb9ef62fd",
+          "mode": "list",
+          "cachedResultName": "MAIN Tasks",
+          "cachedResultUrl": "https://www.notion.so/14ad71fc6bb380efb851e5abb9ef62fd"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Task name|title",
+              "title": "={{ $json.subject }} | {{ $json.contactName }} | {{ $json.messageUrl }}"
+            },
+            {
+              "key": "Lead|people",
+              "peopleValue": [
+                "667b0755-7944-46b7-b2e7-fef0fa42deb8"
+              ]
+            },
+            {
+              "key": "Due|date",
+              "includeTime": false,
+              "date": "={{ $today }}"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": []
+        },
+        "options": {}
+      },
+      "id": "notion-1",
+      "name": "Create Notion Task",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "oiNhuOw2ikLdNhYU",
+          "name": "Notion-Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Personal: Star emails → Notion inbox (Alyson)\n**Mirror of Work workflow — polls Tom's personal Gmail**\n\n### Flow:\n1. Schedule Trigger — polls every minute\n2. Gmail — gets starred emails from Tom's personal Gmail\n3. Code — dedup via staticData\n4. Code — extract contact, format HTML body\n5. IF Has Attachments → Drive upload → build links\n6. Notion — create task in MAIN Tasks\n7. HTTP — append body as Notion page blocks\n\n### SETUP NEEDED:\n- Connect Tom's personal Gmail OAuth2 credential on 'Get Starred Emails'\n- Set Google Drive folder on 'Upload to Google Drive'",
+        "height": 352,
+        "width": 524
+      },
+      "id": "note-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -624
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "att-check-1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.hasAttachments }}",
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-1",
+      "name": "IF Has Attachments",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        752,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const binaryKeys = Object.keys(item.binary || {}).filter(k => k.startsWith('attachment_'));\n  const emailId = item.json.id || item.json.messageId || '';\n\n  for (const key of binaryKeys) {\n    results.push({\n      json: {\n        ...item.json,\n        fileName: item.binary[key].fileName || 'attachment',\n        _emailId: emailId\n      },\n      binary: { data: item.binary[key] }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "code-split",
+      "name": "Split Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "name": "={{ $json.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1BNKD_f7VW4Oxk1fiL1mBFp8-pf-W3rCJ",
+          "mode": "list",
+          "cachedResultName": "Tom Personal - Email attachments",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1BNKD_f7VW4Oxk1fiL1mBFp8-pf-W3rCJ"
+        },
+        "options": {}
+      },
+      "id": "gdrive-1",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1232,
+        -160
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ajPev6saHp2FW0Ju",
+          "name": "Google Drive - Lui"
+        }
+      },
+      "notes": ""
+    },
+    {
+      "parameters": {
+        "jsCode": "// Items here are from \"Upload to Google Drive\", which overwrites item.json\n// with the Drive response (no _emailId). Recover _emailId by parallel lookup\n// into Split Attachments, whose output order matches Upload to Google Drive's.\nconst items = $input.all();\nconst splitItems = $('Split Attachments').all();\nconst allExtracted = $('Extract Contact Name').all();\n\nconst grouped = {};\nitems.forEach((item, i) => {\n  const emailId = splitItems[i]?.json?._emailId || '';\n  if (!grouped[emailId]) grouped[emailId] = [];\n  grouped[emailId].push(item);\n});\n\nconst results = [];\nfor (const [emailId, attachmentItems] of Object.entries(grouped)) {\n  const originalData = allExtracted.find(it =>\n    (it.json.id || it.json.messageId) === emailId\n  );\n  if (!originalData) continue;\n\n  const attachmentLinks = attachmentItems.map(it => ({\n    name: it.json.name || 'attachment',\n    url: it.json.webViewLink || 'https://drive.google.com/file/d/' + it.json.id + '/view'\n  }));\n\n  results.push({\n    json: {\n      ...originalData.json,\n      attachmentText: attachmentLinks.map(l => '- ' + l.name + ': ' + l.url).join('\\n'),\n      attachmentLinks: attachmentLinks\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "code-links",
+      "name": "Build Attachment Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const notionItems = $input.all();\nconst allExtracted = $('Extract Contact Name').all();\nlet allAttachments = [];\ntry { allAttachments = $('Build Attachment Text').all(); } catch (e) {}\n\nconst results = [];\n\nfor (const notionItem of notionItems) {\n  const pageId = notionItem.json.id;\n\n  // Get the page title — either from properties.title (new Notion output)\n  // or from .name (what the Notion node typically returns)\n  let pageTitle = '';\n  try {\n    const titleProp = Object.values(notionItem.json.properties || {}).find(p => p && p.type === 'title');\n    if (titleProp && Array.isArray(titleProp.title)) {\n      pageTitle = titleProp.title.map(t => t.plain_text || (t.text && t.text.content) || '').join('');\n    }\n  } catch (e) {}\n  if (!pageTitle) pageTitle = notionItem.json.name || '';\n\n  const urlMatch = pageTitle.match(/https:\\/\\/mail\\.google\\.com\\/[^\\s]+/);\n  const currentMessageUrl = urlMatch ? urlMatch[0] : '';\n\n  let matchingEmail = null;\n  if (currentMessageUrl) {\n    matchingEmail = allExtracted.find(item => item.json.messageUrl === currentMessageUrl);\n  }\n  if (!matchingEmail) matchingEmail = allExtracted[0];\n\n  const formattedEmail = (matchingEmail && matchingEmail.json && matchingEmail.json.formattedEmail) || '';\n\n  let attachmentLinks = null;\n  if (currentMessageUrl) {\n    const matchingAtt = allAttachments.find(item => item.json.messageUrl === currentMessageUrl);\n    attachmentLinks = (matchingAtt && matchingAtt.json && matchingAtt.json.attachmentLinks) || null;\n  }\n\n  // Strip attachment section from main content\n  const attachRegex = /\\n\\n---\\nAttachments:\\n[\\s\\S]*$/;\n  const mainContent = formattedEmail.replace(attachRegex, '');\n\n  // Split main content into 2000-char chunks at newlines\n  const chunks = [];\n  let remaining = mainContent;\n  while (remaining.length > 0) {\n    let chunk = remaining.substring(0, 2000);\n    if (remaining.length > 2000) {\n      const lastNewline = chunk.lastIndexOf('\\n');\n      if (lastNewline > 500) chunk = remaining.substring(0, lastNewline + 1);\n    }\n    chunks.push(chunk);\n    remaining = remaining.substring(chunk.length);\n  }\n\n  const children = chunks.map(text => ({\n    object: 'block',\n    type: 'paragraph',\n    paragraph: {\n      rich_text: [{ type: 'text', text: { content: text } }]\n    }\n  }));\n\n  // Attachment section as Notion link blocks\n  children.push({\n    object: 'block',\n    type: 'paragraph',\n    paragraph: {\n      rich_text: [{ type: 'text', text: { content: '---\\nAttachments:' } }]\n    }\n  });\n\n  if (attachmentLinks && attachmentLinks.length > 0) {\n    for (const link of attachmentLinks) {\n      children.push({\n        object: 'block',\n        type: 'paragraph',\n        paragraph: {\n          rich_text: [\n            { type: 'text', text: { content: '• ' } },\n            { type: 'text', text: { content: link.name, link: { url: link.url } } }\n          ]\n        }\n      });\n    }\n  } else {\n    children.push({\n      object: 'block',\n      type: 'paragraph',\n      paragraph: {\n        rich_text: [{ type: 'text', text: { content: 'No attachments.' } }]\n      }\n    });\n  }\n\n  // Notion limits children per PATCH to 100; batch if needed\n  for (let b = 0; b < children.length; b += 100) {\n    results.push({\n      json: { pageId, children: children.slice(b, b + 100) }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "code-chunks",
+      "name": "Split Content into Blocks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/blocks/{{ $json.pageId }}/children",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ children: $json.children }) }}",
+        "options": {}
+      },
+      "id": "http-notion",
+      "name": "Append Content to Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2192,
+        0
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "oiNhuOw2ikLdNhYU",
+          "name": "Notion-Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "schedule-1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -208,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 20,
+        "simple": false,
+        "filters": {
+          "q": "is:starred newer_than:365d",
+          "readStatus": "both"
+        },
+        "options": {
+          "dataPropertyAttachmentsPrefixName": "attachment_",
+          "downloadAttachments": true
+        }
+      },
+      "id": "gmail-search",
+      "name": "Get Starred Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        48,
+        0
+      ],
+      "webhookId": "de2f1e39-fd4f-4a32-9e1c-ccde5444b32d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "X4yCxpuLirTZAebP",
+          "name": "Tom (Personal)"
+        }
+      },
+      "notes": "NEEDS SETUP: Connect Tom's personal Gmail OAuth2 credential"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Track processed email IDs across executions\nconst staticData = $getWorkflowStaticData('global');\n\n// One-time reseed: wipe processedIdsV3 so ALL current starred emails get seeded\nif (!staticData._reseedAllStarred_20260430) {\n  delete staticData.processedIdsV3;\n  staticData._reseedAllStarred_20260430 = true;\n}\n\n// One-time cleanup (v4): Split Content errored last run, re-purge the 2 IDs\nif (!staticData._lostIdsReclaimed_20260420_v4) {\n  const LOST_IDS = ['19daaa32e1374e93', '19daa9f6e9bf651d'];\n  if (Array.isArray(staticData.processedIdsV3)) {\n    staticData.processedIdsV3 = staticData.processedIdsV3.filter(id => !LOST_IDS.includes(id));\n  }\n  staticData._lostIdsReclaimed_20260420_v4 = true;\n}\n\nif (!staticData.processedIdsV3) {\n  staticData.processedIdsV3 = [];\n  const items = $input.all();\n  for (const item of items) {\n    const emailId = item.json.id || item.json.messageId || '';\n    if (emailId) staticData.processedIdsV3.push(emailId);\n  }\n  return [];\n}\n\nconst items = $input.all();\nconst newItems = [];\n\nfor (const item of items) {\n  const emailId = item.json.id || item.json.messageId || '';\n  if (emailId && !staticData.processedIdsV3.includes(emailId)) {\n    newItems.push(item);\n    staticData.processedIdsV3.push(emailId);\n  }\n}\n\nif (staticData.processedIdsV3.length > 500) {\n  staticData.processedIdsV3 = staticData.processedIdsV3.slice(-500);\n}\n\nreturn newItems;"
+      },
+      "id": "code-dedup",
+      "name": "Filter Already Processed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "IF Has Attachments": {
+      "main": [
+        [
+          {
+            "node": "Split Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Notion Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Attachments": {
+      "main": [
+        [
+          {
+            "node": "Upload to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Build Attachment Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Attachment Text": {
+      "main": [
+        [
+          {
+            "node": "Create Notion Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Task": {
+      "main": [
+        [
+          {
+            "node": "Split Content into Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Content into Blocks": {
+      "main": [
+        [
+          {
+            "node": "Append Content to Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Contact Name": {
+      "main": [
+        [
+          {
+            "node": "IF Has Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Starred Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Starred Emails": {
+      "main": [
+        [
+          {
+            "node": "Filter Already Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Already Processed": {
+      "main": [
+        [
+          {
+            "node": "Extract Contact Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate",
+    "errorWorkflow": "g67Nzpu0LDrJoyq6",
+    "timeSavedMode": "fixed"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    },
+    "global": {
+      "_reseedAllStarred_20260430": true,
+      "_lostIdsReclaimed_20260420_v4": true,
+      "processedIdsV3": [
+        "19dd55e51bf4ee5e",
+        "19dba54c331d7c57",
+        "19daff4799ef3488",
+        "19dacbaff4508c5f",
+        "19da8cbb70fda02b",
+        "19da757489d83065",
+        "19d9d989d43db628",
+        "19d9d1756e744040",
+        "19d9b7f65990828b",
+        "19d9b7f1bf00e506",
+        "19d988d42e949088",
+        "19d96f7cacb9c5e2",
+        "19d92be155f30db4",
+        "19d9247489be47bd",
+        "19d91b6731ac5ebf",
+        "19d8de001c0e260c",
+        "19d8dd22b0a172ea",
+        "19d8dcf235e34640",
+        "19d8c5a7ebf91b7e",
+        "19d8851f593392b9",
+        "19ddea3c2720d24a",
+        "19dd7cd9e375cf83"
+      ]
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "b0310083-a3f9-445b-81aa-436fcf10f6d3",
+  "activeVersionId": "b0310083-a3f9-445b-81aa-436fcf10f6d3",
+  "versionCounter": 25,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-04-11T23:43:24.643Z",
+      "createdAt": "2026-04-11T23:43:24.643Z",
+      "role": "workflow:owner",
+      "workflowId": "0kMoxTOpGoVlrzSP",
+      "projectId": "uqWFqOrsyvBDfZDp",
+      "project": {
+        "updatedAt": "2026-03-19T16:46:52.932Z",
+        "createdAt": "2026-03-14T13:17:32.741Z",
+        "id": "uqWFqOrsyvBDfZDp",
+        "name": "Lui Agusa <lui@edscalellc.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "bc7196e7-1663-4f4c-ac36-dd02edb07145"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-04-30T13:40:23.110Z",
+    "createdAt": "2026-04-30T13:40:23.110Z",
+    "versionId": "b0310083-a3f9-445b-81aa-436fcf10f6d3",
+    "workflowId": "0kMoxTOpGoVlrzSP",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "// ===== HELPER FUNCTIONS =====\n\nfunction decode(str) {\n  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\").replace(/&nbsp;/g, ' ').replace(/&#(\\d+);/g, (m, c) => String.fromCharCode(c));\n}\n\n// Extract name from Gmail's {value:[{address,name}]} format\nfunction getName(field) {\n  if (!field) return '';\n  if (typeof field === 'string') {\n    const m = field.match(/^\"?([^\"<]+)\"?\\s*</);\n    return m ? m[1].trim() : field.replace(/\"/g, '').trim();\n  }\n  if (typeof field === 'object' && !Array.isArray(field)) {\n    if (field.value && Array.isArray(field.value)) {\n      return field.value.map(v => (v.name || v.address || '').replace(/\"/g, '').trim()).join(', ');\n    }\n    return (field.name || field.address || '').replace(/\"/g, '').trim();\n  }\n  if (Array.isArray(field)) return field.map(f => getName(f)).join(', ');\n  return String(field);\n}\n\n// Extract email from Gmail's {value:[{address,name}]} format\nfunction getEmail(field) {\n  if (!field) return '';\n  if (typeof field === 'string') {\n    const m = field.match(/<([^>]+)>/);\n    return m ? m[1] : field;\n  }\n  if (typeof field === 'object' && !Array.isArray(field)) {\n    if (field.value && Array.isArray(field.value) && field.value[0]) {\n      return field.value[0].address || field.value[0].email || '';\n    }\n    return field.email || field.address || '';\n  }\n  return String(field);\n}\n\n// Format HTML to clean plain text following these rules:\n// - Remove ALL HTML tags entirely\n// - Convert line breaks and paragraph tags into natural line breaks\n// - Do NOT use any headings — plain text blocks only\n// - Preserve bullet points and numbered lists, max 2 levels deep\n// - Keep all original text exactly as written — no summarizing\n// - Remove inline styles, scripts, metadata\nfunction formatHtml(html) {\n  if (!html) return '';\n\n  // Remove style, script, comments\n  html = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n  html = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\n  html = html.replace(/<!--[\\s\\S]*?-->/g, '');\n\n  // Convert links: preserve as text (url)\n  html = html.replace(/<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi, (m, url, text) => {\n    text = text.replace(/<[^>]+>/g, '').trim();\n    if (!text || text === url) return url;\n    return text + ' (' + url + ')';\n  });\n\n  // Convert block elements to line breaks\n  html = html.replace(/<br\\s*\\/?>/gi, '\\n');\n  html = html.replace(/<\\/(p|div|blockquote)>/gi, '\\n\\n');\n  html = html.replace(/<p[^>]*>/gi, '');\n  html = html.replace(/<div[^>]*>/gi, '');\n  html = html.replace(/<blockquote[^>]*>/gi, '');\n\n  // Tables: rows become lines, cells become spaces\n  html = html.replace(/<\\/(tr)>/gi, '\\n');\n  html = html.replace(/<\\/(td|th)>/gi, ' ');\n\n  // Horizontal rules\n  html = html.replace(/<hr[^>]*>/gi, '\\n---\\n');\n\n  // Headings: convert to plain text (no heading formatting)\n  html = html.replace(/<h[1-6][^>]*>/gi, '\\n');\n  html = html.replace(/<\\/h[1-6]>/gi, '\\n\\n');\n\n  // Lists: preserve bullet points, flatten to max 2 levels\n  html = html.replace(/<\\/li>/gi, '\\n');\n  // Nested lists (3+ deep) — flatten\n  html = html.replace(/<(ul|ol)[^>]*>/gi, '');\n  html = html.replace(/<\\/(ul|ol)>/gi, '');\n  html = html.replace(/<li[^>]*>/gi, '\\u2022 ');\n\n  // Strip ALL remaining HTML tags\n  html = html.replace(/<[^>]+>/g, '');\n\n  // Decode HTML entities\n  html = decode(html);\n\n  // Clean up whitespace\n  html = html.replace(/[ \\t]+/g, ' ');\n  html = html.replace(/\\n[ \\t]+/g, '\\n');\n  html = html.replace(/[ \\t]+\\n/g, '\\n');\n  html = html.replace(/\\n{3,}/g, '\\n\\n');\n\n  return html.trim();\n}\n\n// ===== MAIN PROCESSING =====\n\nfor (const item of $input.all()) {\n  const json = item.json;\n\n  // Extract fields\n  const rawFrom = json.from || json.From;\n  const rawTo = json.to || json.To;\n  const fromName = getName(rawFrom);\n  const toName = getName(rawTo);\n  const fromEmail = getEmail(rawFrom).toLowerCase();\n  const subject = json.subject || json.Subject || '';\n  const date = json.date || json.Date || '';\n  const messageUrl = json.messageUrl || ('https://mail.google.com/mail/u/0/#inbox/' + (json.id || ''));\n\n  // Contact name: if Tom sent it, use recipient; otherwise use sender\n  const isTom = fromEmail.includes('tom.dewire@gmail.com');\n  item.json.contactName = isTom ? toName : fromName;\n\n  // Format email body from HTML\n  const bodyHtml = json.textHtml || json.html || '';\n  const bodyFormatted = formatHtml(bodyHtml) || json.textPlain || json.text || json.snippet || '';\n\n  // Detect attachments\n  const binaryKeys = Object.keys(item.binary || {}).filter(k => k.startsWith('attachment_'));\n  const attachmentNames = binaryKeys.map(k => (item.binary[k].fileName || k));\n\n  // Build full \"Name <email>\" for From/To display\n  const fromDisplay = fromName && fromEmail ? fromName + ' <' + getEmail(rawFrom) + '>' : fromName || getEmail(rawFrom);\n  const toDisplay = (() => {\n    if (!rawTo) return '';\n    if (typeof rawTo === 'object' && !Array.isArray(rawTo) && rawTo.value && Array.isArray(rawTo.value)) {\n      return rawTo.value.map(v => {\n        const n = (v.name || '').replace(/\"/g, '').trim();\n        const e = (v.address || v.email || '').trim();\n        if (n && e) return n + ' <' + e + '>';\n        return e || n || '';\n      }).filter(s => s).join(', ');\n    }\n    const tn = toName;\n    const te = getEmail(rawTo);\n    return tn && te ? tn + ' <' + te + '>' : tn || te;\n  })();\n\n  let formatted = 'From: ' + fromDisplay;\n  formatted += '\\nTo: ' + toDisplay;\n  formatted += '\\nDate: ' + date;\n  formatted += '\\nSubject: ' + subject;\n  formatted += '\\nEmail URL: ' + messageUrl;\n  formatted += '\\n\\n---\\n\\n';\n  formatted += bodyFormatted;\n  formatted += '\\n\\n---\\nAttachments:\\n';\n  if (attachmentNames.length > 0) {\n    formatted += attachmentNames.map(n => n).join('\\n');\n  } else {\n    formatted += 'No attachments.';\n  }\n\n  // Store results\n  item.json.formattedEmail = formatted;\n  item.json.subject = subject;\n  item.json.date = date;\n  item.json.from = fromName;\n  item.json.to = toName;\n  item.json.messageUrl = messageUrl;\n  item.json.hasAttachments = binaryKeys.length > 0;\n  item.json.attachmentNames = attachmentNames;\n  item.json.attachmentText = '';\n}\n\nreturn $input.all();"
+        },
+        "id": "code-1",
+        "name": "Extract Contact Name",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          512,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "databasePage",
+          "databaseId": {
+            "__rl": true,
+            "value": "14ad71fc-6bb3-80ef-b851-e5abb9ef62fd",
+            "mode": "list",
+            "cachedResultName": "MAIN Tasks",
+            "cachedResultUrl": "https://www.notion.so/14ad71fc6bb380efb851e5abb9ef62fd"
+          },
+          "propertiesUi": {
+            "propertyValues": [
+              {
+                "key": "Task name|title",
+                "title": "={{ $json.subject }} | {{ $json.contactName }} | {{ $json.messageUrl }}"
+              },
+              {
+                "key": "Lead|people",
+                "peopleValue": [
+                  "667b0755-7944-46b7-b2e7-fef0fa42deb8"
+                ]
+              },
+              {
+                "key": "Due|date",
+                "includeTime": false,
+                "date": "={{ $today }}"
+              }
+            ]
+          },
+          "blockUi": {
+            "blockValues": []
+          },
+          "options": {}
+        },
+        "id": "notion-1",
+        "name": "Create Notion Task",
+        "type": "n8n-nodes-base.notion",
+        "typeVersion": 2.2,
+        "position": [
+          1712,
+          0
+        ],
+        "credentials": {
+          "notionApi": {
+            "id": "oiNhuOw2ikLdNhYU",
+            "name": "Notion-Tom"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## Personal: Star emails → Notion inbox (Alyson)\n**Mirror of Work workflow — polls Tom's personal Gmail**\n\n### Flow:\n1. Schedule Trigger — polls every minute\n2. Gmail — gets starred emails from Tom's personal Gmail\n3. Code — dedup via staticData\n4. Code — extract contact, format HTML body\n5. IF Has Attachments → Drive upload → build links\n6. Notion — create task in MAIN Tasks\n7. HTTP — append body as Notion page blocks\n\n### SETUP NEEDED:\n- Connect Tom's personal Gmail OAuth2 credential on 'Get Starred Emails'\n- Set Google Drive folder on 'Upload to Google Drive'",
+          "height": 352,
+          "width": 524
+        },
+        "id": "note-1",
+        "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -256,
+          -624
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "att-check-1",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "leftValue": "={{ $json.hasAttachments }}",
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "if-1",
+        "name": "IF Has Attachments",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          752,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const binaryKeys = Object.keys(item.binary || {}).filter(k => k.startsWith('attachment_'));\n  const emailId = item.json.id || item.json.messageId || '';\n\n  for (const key of binaryKeys) {\n    results.push({\n      json: {\n        ...item.json,\n        fileName: item.binary[key].fileName || 'attachment',\n        _emailId: emailId\n      },\n      binary: { data: item.binary[key] }\n    });\n  }\n}\n\nreturn results;"
+        },
+        "id": "code-split",
+        "name": "Split Attachments",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          992,
+          -160
+        ]
+      },
+      {
+        "parameters": {
+          "name": "={{ $json.fileName }}",
+          "driveId": {
+            "__rl": true,
+            "value": "My Drive",
+            "mode": "list",
+            "cachedResultName": "My Drive",
+            "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+          },
+          "folderId": {
+            "__rl": true,
+            "value": "1BNKD_f7VW4Oxk1fiL1mBFp8-pf-W3rCJ",
+            "mode": "list",
+            "cachedResultName": "Tom Personal - Email attachments",
+            "cachedResultUrl": "https://drive.google.com/drive/folders/1BNKD_f7VW4Oxk1fiL1mBFp8-pf-W3rCJ"
+          },
+          "options": {}
+        },
+        "id": "gdrive-1",
+        "name": "Upload to Google Drive",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [
+          1232,
+          -160
+        ],
+        "credentials": {
+          "googleDriveOAuth2Api": {
+            "id": "ajPev6saHp2FW0Ju",
+            "name": "Google Drive - Lui"
+          }
+        },
+        "notes": ""
+      },
+      {
+        "parameters": {
+          "jsCode": "// Items here are from \"Upload to Google Drive\", which overwrites item.json\n// with the Drive response (no _emailId). Recover _emailId by parallel lookup\n// into Split Attachments, whose output order matches Upload to Google Drive's.\nconst items = $input.all();\nconst splitItems = $('Split Attachments').all();\nconst allExtracted = $('Extract Contact Name').all();\n\nconst grouped = {};\nitems.forEach((item, i) => {\n  const emailId = splitItems[i]?.json?._emailId || '';\n  if (!grouped[emailId]) grouped[emailId] = [];\n  grouped[emailId].push(item);\n});\n\nconst results = [];\nfor (const [emailId, attachmentItems] of Object.entries(grouped)) {\n  const originalData = allExtracted.find(it =>\n    (it.json.id || it.json.messageId) === emailId\n  );\n  if (!originalData) continue;\n\n  const attachmentLinks = attachmentItems.map(it => ({\n    name: it.json.name || 'attachment',\n    url: it.json.webViewLink || 'https://drive.google.com/file/d/' + it.json.id + '/view'\n  }));\n\n  results.push({\n    json: {\n      ...originalData.json,\n      attachmentText: attachmentLinks.map(l => '- ' + l.name + ': ' + l.url).join('\\n'),\n      attachmentLinks: attachmentLinks\n    }\n  });\n}\n\nreturn results;"
+        },
+        "id": "code-links",
+        "name": "Build Attachment Text",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1472,
+          -160
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const notionItems = $input.all();\nconst allExtracted = $('Extract Contact Name').all();\nlet allAttachments = [];\ntry { allAttachments = $('Build Attachment Text').all(); } catch (e) {}\n\nconst results = [];\n\nfor (const notionItem of notionItems) {\n  const pageId = notionItem.json.id;\n\n  // Get the page title — either from properties.title (new Notion output)\n  // or from .name (what the Notion node typically returns)\n  let pageTitle = '';\n  try {\n    const titleProp = Object.values(notionItem.json.properties || {}).find(p => p && p.type === 'title');\n    if (titleProp && Array.isArray(titleProp.title)) {\n      pageTitle = titleProp.title.map(t => t.plain_text || (t.text && t.text.content) || '').join('');\n    }\n  } catch (e) {}\n  if (!pageTitle) pageTitle = notionItem.json.name || '';\n\n  const urlMatch = pageTitle.match(/https:\\/\\/mail\\.google\\.com\\/[^\\s]+/);\n  const currentMessageUrl = urlMatch ? urlMatch[0] : '';\n\n  let matchingEmail = null;\n  if (currentMessageUrl) {\n    matchingEmail = allExtracted.find(item => item.json.messageUrl === currentMessageUrl);\n  }\n  if (!matchingEmail) matchingEmail = allExtracted[0];\n\n  const formattedEmail = (matchingEmail && matchingEmail.json && matchingEmail.json.formattedEmail) || '';\n\n  let attachmentLinks = null;\n  if (currentMessageUrl) {\n    const matchingAtt = allAttachments.find(item => item.json.messageUrl === currentMessageUrl);\n    attachmentLinks = (matchingAtt && matchingAtt.json && matchingAtt.json.attachmentLinks) || null;\n  }\n\n  // Strip attachment section from main content\n  const attachRegex = /\\n\\n---\\nAttachments:\\n[\\s\\S]*$/;\n  const mainContent = formattedEmail.replace(attachRegex, '');\n\n  // Split main content into 2000-char chunks at newlines\n  const chunks = [];\n  let remaining = mainContent;\n  while (remaining.length > 0) {\n    let chunk = remaining.substring(0, 2000);\n    if (remaining.length > 2000) {\n      const lastNewline = chunk.lastIndexOf('\\n');\n      if (lastNewline > 500) chunk = remaining.substring(0, lastNewline + 1);\n    }\n    chunks.push(chunk);\n    remaining = remaining.substring(chunk.length);\n  }\n\n  const children = chunks.map(text => ({\n    object: 'block',\n    type: 'paragraph',\n    paragraph: {\n      rich_text: [{ type: 'text', text: { content: text } }]\n    }\n  }));\n\n  // Attachment section as Notion link blocks\n  children.push({\n    object: 'block',\n    type: 'paragraph',\n    paragraph: {\n      rich_text: [{ type: 'text', text: { content: '---\\nAttachments:' } }]\n    }\n  });\n\n  if (attachmentLinks && attachmentLinks.length > 0) {\n    for (const link of attachmentLinks) {\n      children.push({\n        object: 'block',\n        type: 'paragraph',\n        paragraph: {\n          rich_text: [\n            { type: 'text', text: { content: '• ' } },\n            { type: 'text', text: { content: link.name, link: { url: link.url } } }\n          ]\n        }\n      });\n    }\n  } else {\n    children.push({\n      object: 'block',\n      type: 'paragraph',\n      paragraph: {\n        rich_text: [{ type: 'text', text: { content: 'No attachments.' } }]\n      }\n    });\n  }\n\n  // Notion limits children per PATCH to 100; batch if needed\n  for (let b = 0; b < children.length; b += 100) {\n    results.push({\n      json: { pageId, children: children.slice(b, b + 100) }\n    });\n  }\n}\n\nreturn results;"
+        },
+        "id": "code-chunks",
+        "name": "Split Content into Blocks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1952,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "=https://api.notion.com/v1/blocks/{{ $json.pageId }}/children",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "notionApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Notion-Version",
+                "value": "2022-06-28"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ children: $json.children }) }}",
+          "options": {}
+        },
+        "id": "http-notion",
+        "name": "Append Content to Page",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2192,
+          0
+        ],
+        "credentials": {
+          "notionApi": {
+            "id": "oiNhuOw2ikLdNhYU",
+            "name": "Notion-Tom"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes"
+              }
+            ]
+          }
+        },
+        "id": "schedule-1",
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          -208,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "getAll",
+          "limit": 20,
+          "simple": false,
+          "filters": {
+            "q": "is:starred newer_than:365d",
+            "readStatus": "both"
+          },
+          "options": {
+            "dataPropertyAttachmentsPrefixName": "attachment_",
+            "downloadAttachments": true
+          }
+        },
+        "id": "gmail-search",
+        "name": "Get Starred Emails",
+        "type": "n8n-nodes-base.gmail",
+        "typeVersion": 2.2,
+        "position": [
+          48,
+          0
+        ],
+        "webhookId": "de2f1e39-fd4f-4a32-9e1c-ccde5444b32d",
+        "credentials": {
+          "gmailOAuth2": {
+            "id": "X4yCxpuLirTZAebP",
+            "name": "Tom (Personal)"
+          }
+        },
+        "notes": "NEEDS SETUP: Connect Tom's personal Gmail OAuth2 credential"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Track processed email IDs across executions\nconst staticData = $getWorkflowStaticData('global');\n\n// One-time reseed: wipe processedIdsV3 so ALL current starred emails get seeded\nif (!staticData._reseedAllStarred_20260430) {\n  delete staticData.processedIdsV3;\n  staticData._reseedAllStarred_20260430 = true;\n}\n\n// One-time cleanup (v4): Split Content errored last run, re-purge the 2 IDs\nif (!staticData._lostIdsReclaimed_20260420_v4) {\n  const LOST_IDS = ['19daaa32e1374e93', '19daa9f6e9bf651d'];\n  if (Array.isArray(staticData.processedIdsV3)) {\n    staticData.processedIdsV3 = staticData.processedIdsV3.filter(id => !LOST_IDS.includes(id));\n  }\n  staticData._lostIdsReclaimed_20260420_v4 = true;\n}\n\nif (!staticData.processedIdsV3) {\n  staticData.processedIdsV3 = [];\n  const items = $input.all();\n  for (const item of items) {\n    const emailId = item.json.id || item.json.messageId || '';\n    if (emailId) staticData.processedIdsV3.push(emailId);\n  }\n  return [];\n}\n\nconst items = $input.all();\nconst newItems = [];\n\nfor (const item of items) {\n  const emailId = item.json.id || item.json.messageId || '';\n  if (emailId && !staticData.processedIdsV3.includes(emailId)) {\n    newItems.push(item);\n    staticData.processedIdsV3.push(emailId);\n  }\n}\n\nif (staticData.processedIdsV3.length > 500) {\n  staticData.processedIdsV3 = staticData.processedIdsV3.slice(-500);\n}\n\nreturn newItems;"
+        },
+        "id": "code-dedup",
+        "name": "Filter Already Processed",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          272,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "IF Has Attachments": {
+        "main": [
+          [
+            {
+              "node": "Split Attachments",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Create Notion Task",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Attachments": {
+        "main": [
+          [
+            {
+              "node": "Upload to Google Drive",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upload to Google Drive": {
+        "main": [
+          [
+            {
+              "node": "Build Attachment Text",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Attachment Text": {
+        "main": [
+          [
+            {
+              "node": "Create Notion Task",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Notion Task": {
+        "main": [
+          [
+            {
+              "node": "Split Content into Blocks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Content into Blocks": {
+        "main": [
+          [
+            {
+              "node": "Append Content to Page",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Contact Name": {
+        "main": [
+          [
+            {
+              "node": "IF Has Attachments",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "Get Starred Emails",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Starred Emails": {
+        "main": [
+          [
+            {
+              "node": "Filter Already Processed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter Already Processed": {
+        "main": [
+          [
+            {
+              "node": "Extract Contact Name",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Lui Agusa",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-04-30T13:40:23.182Z",
+        "id": 3825,
+        "workflowId": "0kMoxTOpGoVlrzSP",
+        "versionId": "b0310083-a3f9-445b-81aa-436fcf10f6d3",
+        "event": "activated",
+        "userId": "bc7196e7-1663-4f4c-ac36-dd02edb07145"
+      },
+      {
+        "createdAt": "2026-04-30T13:40:23.150Z",
+        "id": 3824,
+        "workflowId": "0kMoxTOpGoVlrzSP",
+        "versionId": "b0310083-a3f9-445b-81aa-436fcf10f6d3",
+        "event": "deactivated",
+        "userId": "bc7196e7-1663-4f4c-ac36-dd02edb07145"
+      }
+    ]
+  }
+}
