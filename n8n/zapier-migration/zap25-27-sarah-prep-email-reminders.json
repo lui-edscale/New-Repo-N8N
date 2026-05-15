@@ -1,0 +1,322 @@
+{
+  "name": "Zap #25+27: Sarah Prep Email Reminders (Implementation + CTE Monthly)",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Iterate over every queried page with EXPLICIT pairedItem so downstream\n// nodes (Gmail -> Notion update) can reliably trace each email back to its\n// own source page, even when multiple pages flow through in one batch.\n//\n// Note: input comes from Notion getAll node, which simplifies properties as\n// `property_<snake_case>` (different from Notion Trigger's flat output).\nconst items = $input.all();\nconst results = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const trigger = items[i].json;\n  const emailList = trigger.property_mtg_attendees || '';\n\n  // Filter out edscalellc.com domain\n  const emails = emailList.split(/[,;\\s]+/).map(e => e.trim()).filter(e => e && !e.toLowerCase().includes('edscalellc.com'));\n\n  const title = trigger.property_task_name || '';\n\n  // Format date and time from property_due.start\n  const dueIso = trigger.property_due && trigger.property_due.start;\n  let meetingDate = '';\n  let meetingTime = '';\n  if (dueIso) {\n    const dt = DateTime.fromISO(dueIso, { zone: 'America/New_York' });\n    meetingDate = dt.toFormat('LLLL d, yyyy');\n    meetingTime = dt.toFormat('h:mm a ZZZZ');\n  }\n\n  const titleLower = title.toLowerCase();\n  const pathType = titleLower.startsWith('implementation session') ? 'Implementation Session'\n    : titleLower.startsWith('cte monthly') ? 'CTE Monthly'\n    : 'Other';\n\n  results.push({\n    json: {\n      toEmailsStr: emails.join(','),\n      meetingDate,\n      meetingTime,\n      title,\n      pageId: trigger.id,\n      pathType\n    },\n    pairedItem: { item: i }\n  });\n}\n\nreturn results;"
+      },
+      "id": "extract-data",
+      "name": "Extract Email Recipients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [592, 400]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.pathType }}",
+                    "rightValue": "Implementation Session",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "1596c891-a7da-43cc-9af7-757b4565183b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Implementation Session"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.pathType }}",
+                    "rightValue": "CTE Monthly",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "988ef4b2-ab9a-43f0-91f5-6155afc3786d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CTE Monthly"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "switch-path",
+      "name": "Route by Meeting Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [816, 400],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.toEmailsStr }}",
+        "subject": "=Prep Needed: {{ $json.title }}",
+        "message": "=<p>Looking forward to our upcoming coaching call on {{ $json.meetingDate }} at {{ $json.meetingTime }}.</p>\n\n<p>To maximize our time together, please complete the appropriate meeting prep reflections:</p>\n<ul>\n    <li><a href=\"https://edscale.notion.site/152d71fc6bb38040b9ffd4efd4fc9ecc\">Regular Coaching Call Prep Link</a></li>\n</ul>\n<p>As always, you can reach these links through your Coaching Hub or reschedule our call. Both links are included in the meeting calendar invites.</p>\n\n<div dir=\"ltr\"><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\">Sarah Sanchez-Leal, Education Analyst</div></div><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\"><img data-aii=\"CiExYUwzRXNNWFR3QXlWNVFEekRiem9abVR3c0JHdmZaWDg\" src=\"https://ci3.googleusercontent.com/mail-sig/AIorK4x6l3WBSoTJmo9aSlhwhuSAoMTnt0EBQVrCp_lvf6m6o6El3nvnuSe47cBrQY69rFufi3v8pjFccGac\" data-os=\"https://lh3.googleusercontent.com/d/1aL3EsMXTwAyV5QDzDbzoZmTwsBGvfZX8\"></div></div><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\"><div><span style=\"font-family:arial,sans-serif\"><a href=\"http://www.edscalellc.com/\" style=\"color:rgb(17,85,204)\" target=\"_blank\"><font color=\"#351c75\">www.edscalellc.com</font></a><font color=\"#888888\"> | (512) 640-9657</font></span><font color=\"#888888\"></font></div><div><a href=\"https://tidycal.com/mp4podm\" target=\"_blank\">Book a Meeting with me! </a></div></div></div></div>",
+        "options": {
+          "appendAttribution": false,
+          "bccList": "lui@edscalellc.com"
+        }
+      },
+      "id": "gmail-implementation",
+      "name": "Send Implementation Session Prep",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1152, 208],
+      "webhookId": "6a8ca735-7021-4ff6-b253-6e236647c4df",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "V8MnhcLF5PbQBD4p",
+          "name": "Gmail Sarah"
+        }
+      },
+      "notes": "Using Lui's Gmail credential temporarily until Sarah's is provisioned"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.toEmailsStr }}",
+        "subject": "=Prep Needed: {{ $json.title }}| {{ $json.meetingDate }}",
+        "message": "=<p>I look forward to seeing you all for our check-in on {{ $json.meetingDate }} at {{ $json.meetingTime }}.</p>\n\n<p>To ensure we make the most of our time, please take a moment to review and update your <a href=\"https://www.notion.so/edscale/Individual-Task-Views-271d71fc6bb380c09425d89fade04621?source=copy_link\">Individual Task View</a>. Marking items as complete allows us to celebrate our wins and shifts our focus toward strategic next steps and how EdScale can best support you.</p>\n\n<p><strong>Pro-tip:</strong> Click the star icon in the top right corner to favorite your view for easy access!</p>\n\n<p>Kind regards,</p>\n\n<div dir=\"ltr\"><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\">Sarah Sanchez-Leal, Education Analyst</div></div><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\"><img data-aii=\"CiExYUwzRXNNWFR3QXlWNVFEekRiem9abVR3c0JHdmZaWDg\" src=\"https://ci3.googleusercontent.com/mail-sig/AIorK4x6l3WBSoTJmo9aSlhwhuSAoMTnt0EBQVrCp_lvf6m6o6El3nvnuSe47cBrQY69rFufi3v8pjFccGac\" data-os=\"https://lh3.googleusercontent.com/d/1aL3EsMXTwAyV5QDzDbzoZmTwsBGvfZX8\"></div></div><div dir=\"ltr\" style=\"color:rgb(136,136,136);font-size:12.8px\"><div style=\"font-family:tahoma,sans-serif;font-size:small;display:inline\"><div><span style=\"font-family:arial,sans-serif\"><a href=\"http://www.edscalellc.com/\" style=\"color:rgb(17,85,204)\" target=\"_blank\"><font color=\"#351c75\">www.edscalellc.com</font></a><font color=\"#888888\"> | (512) 640-9657</font></span><font color=\"#888888\"></font></div><div><a href=\"https://tidycal.com/mp4podm\" target=\"_blank\">Book a Meeting with me! </a></div></div></div></div>",
+        "options": {
+          "appendAttribution": false,
+          "bccList": "lui@edscalellc.com"
+        }
+      },
+      "id": "gmail-monthly",
+      "name": "Send CTE Monthly Check-in Prep",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1152, 560],
+      "webhookId": "7b682eae-32fd-4e1a-84a5-29cea7364d9f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "V8MnhcLF5PbQBD4p",
+          "name": "Gmail Sarah"
+        }
+      },
+      "notes": "Using Lui's Gmail credential temporarily until Sarah's is provisioned"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $('Extract Email Recipients').item.json.pageId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Prep Status|status",
+              "statusValue": "Email sent"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notion-update-status",
+      "name": "Update Prep Status to Email Sent",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [1536, 400],
+      "credentials": {
+        "notionApi": {
+          "id": "oiNhuOw2ikLdNhYU",
+          "name": "Notion-Tom"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Zap #25+27: Sarah Prep Email Reminders\n**Consolidation of Zap #25 (Implementation Session) + Zap #27 (CTE Monthly)**\nMirrors Zap #8 Coaching Prep Reminder pattern.\n\n### Flow:\n1. Schedule Every Minute\n2. Notion getAll — MAIN Tasks filtered by Prep Status = 'SEND Email', Status != Done, Lead contains Sarah\n3. Code — extract recipients (filter edscalellc), format date/time, determine path by title prefix\n4. Switch — route by title prefix:\n   - starts with 'Implementation Session' → Implementation email\n   - starts with 'CTE Monthly' → Monthly Check-in email\n5. Gmail — send the matching email (from Sarah)\n6. Notion — update Prep Status → 'Email sent'\n\n### SETUP NEEDED:\n- Connect Sarah's Gmail OAuth2 credential on both Gmail nodes",
+        "height": 420,
+        "width": 540
+      },
+      "id": "note-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-160, -96]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "52ca4f9a-700f-4c32-82cf-1b14711b8bd9",
+      "name": "Schedule Every Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-208, 400]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://www.notion.so/14ad71fc6bb380efb851e5abb9ef62fd",
+          "__regex": "(?:https|http)://www\\.notion\\.so/(?:[a-z0-9-]{2,}/)?([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Prep Status|status",
+              "condition": "equals",
+              "statusValue": "SEND Email"
+            },
+            {
+              "key": "Status|status",
+              "condition": "does_not_equal",
+              "statusValue": "Done"
+            },
+            {
+              "key": "Lead|people",
+              "condition": "contains",
+              "peopleValue": "0791a013-2bff-41ce-ae3a-638939cbccc6"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4b82e267-f0a9-473c-a6f6-48e96c2fccbc",
+      "name": "Query Prep Status Send",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [112, 400],
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "oiNhuOw2ikLdNhYU",
+          "name": "Notion-Tom"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Extract Email Recipients": {
+      "main": [
+        [
+          {
+            "node": "Route by Meeting Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Meeting Type": {
+      "main": [
+        [
+          {
+            "node": "Send Implementation Session Prep",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send CTE Monthly Check-in Prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Implementation Session Prep": {
+      "main": [
+        [
+          {
+            "node": "Update Prep Status to Email Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send CTE Monthly Check-in Prep": {
+      "main": [
+        [
+          {
+            "node": "Update Prep Status to Email Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Every Minute": {
+      "main": [
+        [
+          {
+            "node": "Query Prep Status Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Prep Status Send": {
+      "main": [
+        [
+          {
+            "node": "Extract Email Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "g67Nzpu0LDrJoyq6"
+  },
+  "meta": null,
+  "tags": []
+}
